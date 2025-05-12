@@ -76,7 +76,6 @@ train_ds = datasets.ImageFolder(args.train_path,  transform=transform)
 train_loader = DataLoader(train_ds, batch_size=args.bs, shuffle=True,  num_workers=6)
 
 net = getattr(net_sphere, args.net)(len(train_ds.classes))
-print(net)  
 
 net.cuda()
 criterion = net_sphere.AngleLoss()
@@ -88,7 +87,7 @@ elif args.optimizer.lower() == 'adamw': optimizer = optim.AdamW(net.parameters()
 best_acc = 0
 no_improve = 0
 patience = 9
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.6,patience=3)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.6,patience=5)
 # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
 # net.load_state_dict(torch.load(args.best_path))
