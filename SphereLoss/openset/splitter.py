@@ -58,4 +58,4 @@ for identity in test_ids:
     if len(imgs) >= args.min_test_images:
         copy_identity(identity, args.dataset, args.out_test)
     else:
-        copy_identity(identity, args.dataset, args.out_train) # push to train if too little to test
+        copy_identity(identity, args.dataset, args.out_train) # push to train if too little to test.
