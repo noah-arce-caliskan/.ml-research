@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torch.nn.functional as F
-import net_sphere
+import losses_nets
 
 
 def histogram(net, batch_size, data_dir='/home/noah/SphereLoss/openset/test', output_path='/home/noah/SphereLoss/openset/histograms/hist.png', device=None, bins=50, title="OPENSET: Embedding Similarity Distribution"):
