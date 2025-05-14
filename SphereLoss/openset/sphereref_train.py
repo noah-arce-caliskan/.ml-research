@@ -153,6 +153,7 @@ opt_params = [{'params':net.backbone.layer3.parameters(),'lr': args.refine_lr*0.
     {'params':net.fc.parameters(),'lr': args.refine_lr},
     {'params':net.layer_norm.parameters(),'lr': args.refine_lr},
     {'params':ref_net.parameters(),'lr': args.refine_lr}]
+    
 ref_opt = optim.AdamW(opt_params, weight_decay=1e-4)
 scheduler_ref = optim.lr_scheduler.ReduceLROnPlateau(ref_opt, mode='min', factor=0.5, patience=4)
 
@@ -160,45 +161,54 @@ best_eer_ref = 1.0
 no_imp_ref   = 0
 
 for ep in range(args.refine_epochs):
-    net.train(); ref_net.train()
+    net.train()
+    ref_net.train()
     total_loss_r = 0
 
     for imgs, lbls in train_loader:
         imgs, lbls = imgs.to(device), lbls.to(device)
-        emb0 = net(imgs)             # grads through layer3+4
+        emb0 = net(imgs)
         emb1 = ref_net(emb0)
-        # Pairwise mining
+
         dists = pairwise_distances(emb1)
         anchors, positives, negatives = [], [], []
         for i in range(len(lbls)):
-            pos_mask = (lbls==lbls[i]); pos_mask[i]=False
+            pos_mask = (lbls==lbls[i])
+            pos_mask[i]=False
             neg_mask = (lbls!=lbls[i])
             if pos_mask.sum()>0 and neg_mask.sum()>0:
                 hardest_pos = emb1[pos_mask][torch.argmax(dists[i][pos_mask])]
                 hardest_neg = emb1[neg_mask][torch.argmin(dists[i][neg_mask])]
-                anchors.append(emb1[i]); positives.append(hardest_pos); negatives.append(hardest_neg)
+                anchors.append(emb1[i])
+                positives.append(hardest_pos)
+                negatives.append(hardest_neg)
         if len(anchors)==0: continue
-        anc = torch.stack(anchors); pos = torch.stack(positives); neg = torch.stack(negatives)
+        anc = torch.stack(anchors)
+        pos = torch.stack(positives)
+        neg = torch.stack(negatives)
         loss_tri = triplet_crit(anc, pos, neg)
-        # Aux classification on refined features
-        # compute margin-softmax logits on refined, normalized embeddings
+
         cos_phi_ref = net.angle_linear(F.normalize(emb1))
-        # compute angular loss
+
         loss_ang = angle_crit(cos_phi_ref, lbls)
-        # total refinement loss: triplet + small classification term
-        loss_r   = loss_tri + 0.1 * loss_ang
+        loss_r = loss_tri + 0.1 * loss_ang
         
-        ref_opt.zero_grad(); loss_r.backward(); ref_opt.step()
+        ref_opt.zero_grad()
+        loss_r.backward()
+        ref_opt.step()
         total_loss_r += loss_r.item()
 
     avg_r = total_loss_r / len(train_loader)
-    # Validation
-    net.eval(); ref_net.eval()
+
+    net.eval()
+    ref_net.eval()
     emb_val, lbl_val = [], []
     with torch.no_grad():
         for imgs, lbls in val_loader:
-            emb_val.append(ref_net(net(imgs.to(device))).cpu()); lbl_val.append(lbls)
-    emb_val = torch.cat(emb_val); lbl_val = torch.cat(lbl_val)
+            emb_val.append(ref_net(net(imgs.to(device))).cpu())
+            lbl_val.append(lbls)
+    emb_val = torch.cat(emb_val)
+    lbl_val = torch.cat(lbl_val)
     auc_ref, eer_ref = val_metrics(emb_val, lbl_val)
     print(f"Ref Ep{ep+1} Loss:{avg_r:.3f} AUC:{auc_ref:.3f} EER:{eer_ref:.3f}")
 
@@ -212,8 +222,8 @@ for ep in range(args.refine_epochs):
         if no_imp_ref >= 10:
             break
 
-# Final model
-net.eval(); ref_net.eval()
+net.eval()
+ref_net.eval()
 use_ref = (best_eer_ref < best_eer)
 if use_ref:
     ref_net.load_state_dict(torch.load(args.ref_best_weights))
@@ -221,15 +231,15 @@ if use_ref:
 else:
     model = net
 
-# Test & histogram
 all_e, all_l = [], []
 with torch.no_grad():
     for imgs, lbls in test_loader:
         emb0 = net(imgs.to(device))
         emb1 = ref_net(emb0) if use_ref else emb0
-        all_e.append(emb1.cpu()); all_l.append(lbls)
+        all_e.append(emb1.cpu())
+        all_l.append(lbls)
 all_e = torch.cat(all_e); all_l = torch.cat(all_l)
 
 histogram(model, args.bs)
 auc_t, eer_t = val_metrics(all_e, all_l)
-print(f"Final Test AUC: {auc_t:.4f}, EER: {eer_t:.4f}")
+print(f"Final Test AUC: {auc_t:.4f} EER: {eer_t:.4f}")
