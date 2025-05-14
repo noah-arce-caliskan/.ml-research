@@ -126,5 +126,5 @@ for epoch in range(args.epochs):
             break
 
 net.load_state_dict(torch.load(args.best_weights))
-histogram(net, args.bs)
+histogram(net,args.bs)
 print('Best weights and histogram saved.')
